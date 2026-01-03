@@ -1,6 +1,22 @@
 import { useMemo, useState } from 'react'
 import { fetchSentimentByPostId } from './services/sentimentService'
 import type { SentimentSummary } from './types'
+import { useTheme } from './services/themeService'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from 'recharts'
+import {
+  Search, Sun, Moon, MessageSquare, PieChart as PieIcon,
+  ThumbsUp, ThumbsDown, Minus, AlertCircle, ChevronLeft, ChevronRight,
+  TrendingUp, LayoutDashboard, Database, Info, Lightbulb, Sparkles, ShieldAlert
+} from 'lucide-react'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 interface SearchHistory {
   postId: string
@@ -9,13 +25,17 @@ interface SearchHistory {
 }
 
 function App() {
+  const { theme, setTheme } = useTheme()
   const [postId, setPostId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [data, setData] = useState<SentimentSummary | null>(null)
   const [history, setHistory] = useState<SearchHistory[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
   const [selectedTab, setSelectedTab] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all')
+
+  const commentsPerPage = 5
 
   const canSearch = useMemo(() => postId.trim().length > 0 && !loading, [postId, loading])
 
@@ -26,10 +46,13 @@ function App() {
     try {
       const res = await fetchSentimentByPostId(postId.trim())
       setData(res)
-      setHistory(prev => [
-        { postId: postId.trim(), timestamp: Date.now(), summary: res },
-        ...prev.slice(0, 9) // Keep last 10
-      ])
+      const newHistoryItem = { postId: postId.trim(), timestamp: Date.now(), summary: res }
+      setHistory(prev => {
+        const filtered = prev.filter(h => h.postId !== postId.trim()) // Avoid duplicates, move to top
+        return [newHistoryItem, ...filtered.slice(0, 9)]
+      })
+      setCurrentPage(1)
+      setShowHistory(false)
     } catch (e: any) {
       setError(e?.message || 'Failed to fetch sentiment')
     } finally {
@@ -42,6 +65,7 @@ function App() {
     setData(item.summary)
     setError(null)
     setShowHistory(false)
+    setCurrentPage(1)
   }
 
   function clearHistory() {
@@ -49,306 +73,488 @@ function App() {
     setShowHistory(false)
   }
 
-  const posW = data ? `${data.percentages.positive}%` : '0%'
-  const neuW = data ? `${data.percentages.neutral}%` : '0%'
-  const negW = data ? `${data.percentages.negative}%` : '0%'
+  const pieData = useMemo(() => {
+    if (!data) return []
+    return [
+      { name: 'Positive', value: data.counts.positive, color: '#10b981' },
+      { name: 'Neutral', value: data.counts.neutral, color: '#71717a' },
+      { name: 'Negative', value: data.counts.negative, color: '#f43f5e' },
+    ]
+  }, [data])
+
+  const barData = useMemo(() => {
+    if (!data) return []
+    return [
+      { name: 'Positive', value: data.counts.positive, fill: '#10b981' },
+      { name: 'Neutral', value: data.counts.neutral, fill: '#71717a' },
+      { name: 'Negative', value: data.counts.negative, fill: '#f43f5e' },
+    ]
+  }, [data])
 
   const filteredComments = useMemo(() => {
     if (!data) return []
-    if (selectedTab === 'all') {
-      return [
-        ...data.comments.positive.map(c => ({ text: c, sentiment: 'positive' as const })),
-        ...data.comments.neutral.map(c => ({ text: c, sentiment: 'neutral' as const })),
-        ...data.comments.negative.map(c => ({ text: c, sentiment: 'negative' as const })),
-      ]
+    let all: { text: string; sentiment: 'positive' | 'neutral' | 'negative' }[] = []
+
+    if (selectedTab === 'all' || selectedTab === 'positive') {
+      all.push(...data.comments.positive.map(c => ({ text: c, sentiment: 'positive' as const })))
     }
-    return data.comments[selectedTab].map(c => ({ text: c, sentiment: selectedTab }))
+    if (selectedTab === 'all' || selectedTab === 'neutral') {
+      all.push(...data.comments.neutral.map(c => ({ text: c, sentiment: 'neutral' as const })))
+    }
+    if (selectedTab === 'all' || selectedTab === 'negative') {
+      all.push(...data.comments.negative.map(c => ({ text: c, sentiment: 'negative' as const })))
+    }
+
+    return all
   }, [data, selectedTab])
 
-  const dominantSentiment = useMemo(() => {
-    if (!data) return null
-    const max = Math.max(data.percentages.positive, data.percentages.neutral, data.percentages.negative)
-    if (max === data.percentages.positive) return 'positive'
-    if (max === data.percentages.negative) return 'negative'
-    return 'neutral'
-  }, [data])
+  const paginatedComments = useMemo(() => {
+    const start = (currentPage - 1) * commentsPerPage
+    return filteredComments.slice(start, start + commentsPerPage)
+  }, [filteredComments, currentPage])
+
+  const totalPages = Math.ceil(filteredComments.length / commentsPerPage)
+
+  function TakeawayList({ items, type }: { items: string[]; type: 'positive' | 'negative' }) {
+    return (
+      <div className="space-y-4">
+        {items.map((item, idx) => {
+          const trimmedItem = item.trim();
+          if (!trimmedItem) return null;
+
+          const isBullet = trimmedItem.startsWith('*');
+          const cleanItem = isBullet ? trimmedItem.substring(1).trim() : trimmedItem;
+
+          // Robust regex for **bold** text
+          const parts = cleanItem.split(/(\*\*.*?\*\*)/g);
+
+          return (
+            <div key={idx} className={cn(
+              "flex gap-3",
+              isBullet ? "pl-2" : "mt-8 first:mt-0"
+            )}>
+              {isBullet ? (
+                <div className={cn(
+                  "w-1.5 h-1.5 rounded-full mt-[9px] shrink-0 shadow-sm",
+                  type === 'positive' ? "bg-emerald-500" : "bg-rose-500"
+                )} />
+              ) : null}
+              <div className="flex-1">
+                <p className={cn(
+                  "leading-relaxed tracking-normal",
+                  !isBullet
+                    ? "font-black text-foreground/60 uppercase tracking-widest text-[10px] sm:text-xs flex items-center gap-2 mb-2"
+                    : "text-sm md:text-[15px] text-muted-foreground font-medium"
+                )}>
+                  {!isBullet && (type === 'positive' ? <Sparkles className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />)}
+                  <span className="inline-block align-middle">
+                    {parts.map((part, i) => {
+                      if (part.startsWith('**') && part.endsWith('**')) {
+                        return <strong key={i} className="font-bold text-foreground">{part.slice(2, -2)}</strong>;
+                      }
+                      return part;
+                    })}
+                  </span>
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                SocialInsight
-              </h1>
-              <p className="text-sm text-gray-600 mt-1">AI-Powered Social Media Sentiment Analysis</p>
+    <div className="min-h-screen flex flex-col transition-colors duration-300">
+      {/* Navbar */}
+      <nav className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary text-primary-foreground rounded-xl shadow-lg">
+              <MessageSquare className="w-5 h-5" />
             </div>
-            <div className="flex items-center gap-4">
+            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-muted-foreground bg-clip-text text-transparent">
+              SocialInsight
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {history.length > 0 && (
               <button
                 onClick={() => setShowHistory(!showHistory)}
-                className="relative px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors"
+                className="p-2.5 hover:bg-secondary rounded-xl transition-all border border-transparent hover:border-border relative"
+                title="Search History"
               >
-                <svg className="w-5 h-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                History
-                {history.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                    {history.length}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Search Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 border border-gray-100">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Analyze Post Sentiment</h2>
-          <div className="flex gap-3">
-            <input
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-              placeholder="Enter Post ID (e.g., 122098429155169978)"
-              value={postId}
-              onChange={(e) => setPostId(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onSearch()
-              }}
-            />
-            <button
-              className="px-8 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-medium hover:from-blue-700 hover:to-purple-700 disabled:from-gray-300 disabled:to-gray-400 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg disabled:shadow-none"
-              disabled={!canSearch}
-              onClick={onSearch}
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Analyzing...
+                <TrendingUp className="w-5 h-5" />
+                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center border-2 border-card">
+                  {history.length}
                 </span>
-              ) : (
-                'Analyze'
-              )}
+              </button>
+            )}
+            <button
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-2.5 hover:bg-secondary rounded-xl transition-all active:scale-95 border border-transparent hover:border-border"
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-blue-600" />}
             </button>
           </div>
         </div>
+      </nav>
 
-        {/* History Dropdown */}
+      {/* Main Content Area */}
+      <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 md:py-16">
+        {/* History Dropdown Panel */}
         {showHistory && history.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border border-gray-100">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Recent Searches</h3>
-              <button
-                onClick={clearHistory}
-                className="text-sm text-red-600 hover:text-red-700 font-medium"
-              >
-                Clear All
-              </button>
-            </div>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {history.map((item, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => loadFromHistory(item)}
-                  className="w-full text-left p-4 hover:bg-gray-50 rounded-lg transition-colors border border-gray-100"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="font-medium text-gray-900">Post: {item.postId}</div>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {item.summary.total} comments • {new Date(item.timestamp).toLocaleString()}
-                      </div>
-                    </div>
-                    <div className="flex gap-2 text-xs font-medium">
-                      <span className="text-green-600">+{item.summary.percentages.positive}%</span>
-                      <span className="text-gray-500">={item.summary.percentages.neutral}%</span>
-                      <span className="text-red-600">-{item.summary.percentages.negative}%</span>
-                    </div>
-                  </div>
+          <div className="max-w-3xl mx-auto mb-12 animate-in slide-in-from-top-4 duration-300">
+            <div className="bg-card border border-border rounded-3xl p-6 shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="font-black text-lg flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  Recent Searches
+                </h3>
+                <button onClick={clearHistory} className="text-xs font-black uppercase tracking-widest text-destructive hover:opacity-70 transition-opacity">
+                  Clear History
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="p-4 mb-8 bg-red-50 border-2 border-red-200 rounded-xl shadow-sm flex items-start gap-3">
-            <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-            </svg>
-            <div>
-              <h4 className="font-semibold text-red-900">Error</h4>
-              <p className="text-red-700 text-sm mt-1">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Results */}
-        {data && (
-          <div className="space-y-8">
-            {/* Overview Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <h3 className="text-sm font-medium text-gray-600 mb-2">Analysis Results</h3>
-                  <div className="text-4xl font-bold text-gray-900 mb-2">Post {data.postId}</div>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="text-gray-600">{data.total} total comments</span>
-                    {dominantSentiment && (
-                      <span className={`px-3 py-1 rounded-full font-medium ${
-                        dominantSentiment === 'positive' ? 'bg-green-100 text-green-700' :
-                        dominantSentiment === 'negative' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        Mostly {dominantSentiment}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-sm text-gray-600 mb-1">Overall Sentiment</div>
-                  <div className={`text-3xl font-bold ${
-                    dominantSentiment === 'positive' ? 'text-green-600' :
-                    dominantSentiment === 'negative' ? 'text-red-600' :
-                    'text-gray-600'
-                  }`}>
-                    {dominantSentiment === 'positive' ? '😊' :
-                     dominantSentiment === 'negative' ? '😔' : '😐'}
-                  </div>
-                </div>
               </div>
-
-              {/* Progress Bar */}
-              <div className="mb-6">
-                <div className="flex h-4 rounded-full overflow-hidden shadow-inner mb-3" aria-label="Sentiment distribution">
-                  <div className="bg-gradient-to-r from-green-400 to-green-500 transition-all duration-500" style={{ width: posW }} />
-                  <div className="bg-gradient-to-r from-gray-400 to-gray-500 transition-all duration-500" style={{ width: neuW }} />
-                  <div className="bg-gradient-to-r from-red-400 to-red-500 transition-all duration-500" style={{ width: negW }} />
-                </div>
-                <div className="flex justify-between text-sm font-semibold">
-                  <span className="text-green-600">Positive {data.percentages.positive}%</span>
-                  <span className="text-gray-600">Neutral {data.percentages.neutral}%</span>
-                  <span className="text-red-600">Negative {data.percentages.negative}%</span>
-                </div>
-              </div>
-
-              {/* Stats Grid as mini bar charts */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-green-50 rounded-xl border border-green-100">
-                  <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-sm font-medium text-green-700">Positive ({data.counts.positive})</span>
-                    <span className="text-sm font-semibold text-green-700">{data.percentages.positive}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-green-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 transition-all duration-500"
-                      style={{ width: `${data.percentages.positive}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-700">Neutral ({data.counts.neutral})</span>
-                    <span className="text-sm font-semibold text-gray-700">{data.percentages.neutral}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gray-500 transition-all duration-500"
-                      style={{ width: `${data.percentages.neutral}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="p-4 bg-red-50 rounded-xl border border-red-100">
-                  <div className="flex items-baseline justify-between mb-2">
-                    <span className="text-sm font-medium text-red-700">Negative ({data.counts.negative})</span>
-                    <span className="text-sm font-semibold text-red-700">{data.percentages.negative}%</span>
-                  </div>
-                  <div className="h-2 w-full bg-red-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-red-500 transition-all duration-500"
-                      style={{ width: `${data.percentages.negative}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Comments Section */}
-            <div className="bg-white rounded-2xl shadow-lg p-8 border border-gray-100">
-              <h3 className="text-xl font-semibold text-gray-900 mb-6">Comment Analysis</h3>
-              
-              {/* Tabs */}
-              <div className="flex gap-2 mb-6 border-b border-gray-200">
-                {(['all', 'positive', 'neutral', 'negative'] as const).map(tab => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[400px] overflow-y-auto no-scrollbar pr-2">
+                {history.map((item, idx) => (
                   <button
-                    key={tab}
-                    onClick={() => setSelectedTab(tab)}
-                    className={`px-4 py-2 font-medium text-sm capitalize transition-colors border-b-2 ${
-                      selectedTab === tab
-                        ? 'border-blue-600 text-blue-600'
-                        : 'border-transparent text-gray-600 hover:text-gray-900'
-                    }`}
+                    key={idx}
+                    onClick={() => loadFromHistory(item)}
+                    className="text-left p-4 bg-muted/20 border border-border hover:border-primary/30 rounded-2xl transition-all group"
                   >
-                    {tab}
-                    {tab !== 'all' && ` (${data.counts[tab]})`}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-black group-hover:text-primary transition-colors">Post: {item.postId}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase">
+                        {new Date(item.timestamp).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    </div>
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+        <div className="flex flex-col items-center text-center mb-10 md:mb-16">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 border border-primary/10 text-primary text-xs font-bold mb-6 animate-fade-in">
+            <TrendingUp className="w-3 h-3" />
+            <span>AI-POWERED ANALYSIS</span>
+          </div>
+          <h1 className="text-4xl md:text-6xl font-black mb-6 tracking-tight">
+            Customer Sentiment <span className="text-primary">Analysis</span>
+          </h1>
+          <p className="text-muted-foreground text-base md:text-xl max-w-2xl leading-relaxed">
+            Instantly understand how your customers feel. Enter a Facebook Post ID to analyze sentiment distribution and feedback patterns.
+          </p>
+        </div>
 
-              {/* Comments List */}
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
-                {filteredComments.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    No comments in this category
+        {/* Search Section */}
+        <div className="max-w-3xl mx-auto mb-16 md:mb-24">
+          <div className="bg-card border border-border rounded-2xl md:rounded-3xl p-2 md:p-3 flex flex-col md:flex-row items-center gap-2 shadow-2xl relative z-10">
+            <div className="hidden md:flex pl-4 text-muted-foreground">
+              <Database className="w-5 h-5" />
+            </div>
+            <input
+              className="w-full md:flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-3 px-4 outline-none placeholder:text-muted-foreground/50"
+              placeholder="Paste Facebook Post ID here..."
+              value={postId}
+              onChange={(e) => setPostId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+            />
+            <button
+              onClick={onSearch}
+              disabled={!canSearch}
+              className={cn(
+                "w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98]",
+                canSearch
+                  ? "bg-primary text-primary-foreground hover:opacity-90 shadow-xl shadow-primary/20"
+                  : "bg-muted text-muted-foreground cursor-not-allowed"
+              )}
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-3 border-primary-foreground border-t-transparent animate-spin rounded-full" />
+              ) : (
+                <Search className="w-5 h-5" />
+              )}
+              {loading ? 'Analyzing...' : 'Analyze Now'}
+            </button>
+          </div>
+          {error && (
+            <div className="mt-6 flex items-start gap-3 text-destructive bg-destructive/5 p-5 rounded-2xl border border-destructive/20 animate-in slide-in-from-top-2">
+              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-sm font-bold">Analysis Failed</span>
+                <span className="text-sm opacity-90">{error}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {!data && !loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 max-w-5xl mx-auto">
+            {[
+              { icon: TrendingUp, title: "Sentiment Trends", desc: "Identify positive and negative shifts instantly" },
+              { icon: LayoutDashboard, title: "Visual Reports", desc: "Understand distribution through clear charts" },
+              { icon: Info, title: "Granular Feedback", desc: "Read individual comments filtered by sentiment" },
+            ].map((feature, i) => (
+              <div key={i} className="p-8 bg-card/50 border border-border rounded-3xl flex flex-col items-center text-center group hover:bg-card hover:border-primary/20 transition-all duration-300">
+                <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground transition-all duration-300 shadow-sm">
+                  <feature.icon className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-lg mb-3 tracking-tight">{feature.title}</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed font-medium">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {data && (
+          <div className="space-y-8 md:space-y-12 animate-in fade-in slide-in-from-bottom-8 duration-700">
+            {/* Stats Overview */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+              {[
+                { label: 'Positive', count: data.counts.positive, perc: data.percentages.positive, color: 'text-emerald-500', icon: ThumbsUp, bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
+                { label: 'Neutral', count: data.counts.neutral, perc: data.percentages.neutral, color: 'text-zinc-500', icon: Minus, bg: 'bg-zinc-500/10', border: 'border-zinc-500/20' },
+                { label: 'Negative', count: data.counts.negative, perc: data.percentages.negative, color: 'text-rose-500', icon: ThumbsDown, bg: 'bg-rose-500/10', border: 'border-rose-500/20' },
+              ].map((stat, i) => (
+                <div key={i} className={cn("bg-card border p-8 rounded-3xl transition-all hover:shadow-xl", stat.border)}>
+                  <div className="flex items-center justify-between mb-6">
+                    <span className="text-sm font-bold text-muted-foreground uppercase tracking-widest">{stat.label}</span>
+                    <div className={cn("p-2.5 rounded-xl", stat.bg)}>
+                      <stat.icon className={cn("w-5 h-5", stat.color)} />
+                    </div>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-4xl font-black">{stat.count}</span>
+                      <span className="text-xs text-muted-foreground font-medium mt-1">Total Comments</span>
+                    </div>
+                    <div className={cn("text-xl font-black italic", stat.color)}>
+                      {stat.perc}%
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+              {/* Sentiment Distribution Pie */}
+              <div className="bg-card border border-border p-6 md:p-8 rounded-3xl shadow-sm">
+                <div className="flex items-center gap-2 mb-8">
+                  <PieIcon className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-lg">Overall Distribution</h3>
+                </div>
+                <div className="h-[280px] md:h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={80}
+                        outerRadius={120}
+                        paddingAngle={8}
+                        dataKey="value"
+                        animationBegin={0}
+                        animationDuration={1500}
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="none" />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: theme === 'dark' ? '#111' : '#fff',
+                          border: '1px solid var(--border)',
+                          borderRadius: '16px',
+                          boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'
+                        }}
+                      />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Sentiment Summary Bar */}
+              <div className="bg-card border border-border p-6 md:p-8 rounded-3xl shadow-sm">
+                <div className="flex items-center gap-2 mb-8">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  <h3 className="font-bold text-lg">Sentiment Scale</h3>
+                </div>
+                <div className="h-[280px] md:h-[350px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData} layout="vertical" margin={{ top: 5, right: 30, left: 40, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="var(--border)" opacity={0.5} />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px' }} />
+                      <Bar dataKey="value" radius={[0, 12, 12, 0]} barSize={40} animationDuration={1500} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Takeaways */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
+              <div className="bg-gradient-to-br from-emerald-500/5 to-emerald-500/[0.02] border border-emerald-500/10 p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden group hover:border-emerald-500/20 transition-all duration-500">
+                <div className="absolute -right-8 -top-8 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl group-hover:bg-emerald-500/10 transition-colors" />
+                <div className="relative">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                      <Lightbulb className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-xl tracking-tight">Positive Insights</h3>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-500/60">Success Patterns</p>
+                    </div>
+                  </div>
+                  <TakeawayList items={data.takeaways.positive} type="positive" />
+                </div>
+              </div>
+
+              <div className="bg-gradient-to-br from-rose-500/5 to-rose-500/[0.02] border border-rose-500/10 p-8 md:p-10 rounded-[2.5rem] relative overflow-hidden group hover:border-rose-500/20 transition-all duration-500">
+                <div className="absolute -right-8 -top-8 w-32 h-32 bg-rose-500/5 rounded-full blur-3xl group-hover:bg-rose-500/10 transition-colors" />
+                <div className="relative">
+                  <div className="flex items-center gap-4 mb-8">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-500 flex items-center justify-center shadow-lg shadow-rose-500/20">
+                      <AlertCircle className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-xl tracking-tight">Critical Feedback</h3>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500/60">Growth Areas</p>
+                    </div>
+                  </div>
+                  <TakeawayList items={data.takeaways.negative} type="negative" />
+                </div>
+              </div>
+            </div>
+
+            {/* Comments List */}
+            <div className="bg-card border border-border rounded-3xl p-6 md:p-10 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
+                <div>
+                  <h3 className="font-black text-2xl tracking-tight">Analyzed Feedback</h3>
+                  <p className="text-muted-foreground text-sm font-medium mt-1">Drill down into specific customer opinions.</p>
+                </div>
+                <div className="flex bg-muted p-1 md:p-1.5 rounded-2xl w-full md:w-fit overflow-x-auto no-scrollbar">
+                  {(['all', 'positive', 'neutral', 'negative'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => { setSelectedTab(tab); setCurrentPage(1); }}
+                      className={cn(
+                        "flex-1 md:flex-none px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all capitalize whitespace-nowrap",
+                        selectedTab === tab
+                          ? "bg-card text-foreground shadow-lg ring-1 ring-border"
+                          : "text-muted-foreground hover:text-foreground hover:bg-card/50"
+                      )}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4 mb-10">
+                {paginatedComments.length === 0 ? (
+                  <div className="text-center py-20 bg-muted/20 rounded-3xl border border-dashed border-border">
+                    <Info className="w-10 h-10 text-muted-foreground/30 mx-auto mb-4" />
+                    <p className="text-muted-foreground font-bold">No results found for this selection.</p>
                   </div>
                 ) : (
-                  filteredComments.map((comment, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-4 rounded-lg border-l-4 ${
-                        comment.sentiment === 'positive'
-                          ? 'bg-green-50 border-green-500'
-                          : comment.sentiment === 'negative'
-                          ? 'bg-red-50 border-red-500'
-                          : 'bg-gray-50 border-gray-400'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="text-lg">
-                          {comment.sentiment === 'positive' ? '😊' :
-                           comment.sentiment === 'negative' ? '😔' : '😐'}
-                        </span>
-                        <p className="flex-1 text-gray-800 text-sm leading-relaxed">{comment.text}</p>
+                  paginatedComments.map((comment, i) => (
+                    <div key={i} className="group bg-muted/10 border border-border hover:border-primary/30 p-6 md:p-8 rounded-3xl transition-all duration-300 hover:shadow-md animate-in fade-in slide-in-from-left-4" style={{ animationDelay: `${i * 100}ms` }}>
+                      <div className="flex items-start justify-between gap-6">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-4">
+                            <span className={cn(
+                              "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full",
+                              comment.sentiment === 'positive' ? "bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20" :
+                                comment.sentiment === 'negative' ? "bg-rose-500/10 text-rose-500 ring-1 ring-rose-500/20" :
+                                  "bg-zinc-500/10 text-zinc-500 ring-1 ring-zinc-500/20"
+                            )}>
+                              {comment.sentiment}
+                            </span>
+                          </div>
+                          <p className="text-foreground text-base md:text-lg leading-relaxed font-medium">
+                            <span className="text-primary/40 mr-1 text-2xl font-serif">"</span>
+                            {comment.text}
+                            <span className="text-primary/40 ml-1 text-2xl font-serif">"</span>
+                          </p>
+                        </div>
+                        <div className={cn(
+                          "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-500 group-hover:rotate-12",
+                          comment.sentiment === 'positive' ? "bg-emerald-500 shadow-lg shadow-emerald-500/20 text-white" :
+                            comment.sentiment === 'negative' ? "bg-rose-500 shadow-lg shadow-rose-500/20 text-white" :
+                              "bg-zinc-500 shadow-lg shadow-zinc-500/20 text-white"
+                        )}>
+                          {comment.sentiment === 'positive' ? <ThumbsUp className="w-5 h-5" /> :
+                            comment.sentiment === 'negative' ? <ThumbsDown className="w-5 h-5" /> : <Minus className="w-5 h-5" />}
+                        </div>
                       </div>
                     </div>
                   ))
                 )}
               </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-3 border border-border rounded-2xl disabled:opacity-20 hover:bg-secondary transition-all active:scale-90"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                      // Show limited pages on mobile
+                      if (totalPages > 5 && Math.abs(page - currentPage) > 1 && page !== 1 && page !== totalPages) return null;
+                      if (totalPages > 5 && Math.abs(page - currentPage) === 2) return <span key={page} className="text-muted-foreground/30">...</span>;
+
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={cn(
+                            "w-10 h-10 rounded-xl text-sm font-black transition-all active:scale-95",
+                            currentPage === page
+                              ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-110"
+                              : "hover:bg-secondary text-muted-foreground"
+                          )}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-3 border border-border rounded-2xl disabled:opacity-20 hover:bg-secondary transition-all active:scale-90"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
+      </main>
 
-        {/* Empty State */}
-        {!data && !error && !loading && (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">🔍</div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Ready to Analyze</h3>
-            <p className="text-gray-600">Enter a post ID above to get started with sentiment analysis</p>
+      {/* Simplified Footer */}
+      <footer className="border-t border-border mt-auto py-8 bg-card/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col items-center gap-4">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-primary" />
+            <span className="text-xl font-black tracking-tight uppercase">SocialInsight</span>
           </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <footer className="mt-16 border-t border-gray-200 bg-white">
-        <div className="max-w-7xl mx-auto px-6 py-8 text-center text-sm text-gray-600">
-          <p>Powered by AI • Real-time Sentiment Analysis • SocialInsight Engine</p>
+          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-[0.2em] text-center">
+            © 2026 SocialInsight Engine • AI-Driven Sentiment Intelligence
+          </p>
         </div>
       </footer>
     </div>

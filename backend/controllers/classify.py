@@ -2,7 +2,7 @@ from collections import defaultdict
 import os
 import pandas as pd
 from transformers import pipeline
-from takeaway_generation import extract_takeaways
+from .takeaway_generation import extract_takeaways
 def classify_comments():
     sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
 
@@ -50,5 +50,5 @@ def classify_comments():
         "takeaways" : {
             "positive" : positive_takeaways,
             "negative" : negative_takeaways
-    }
+        },
     }

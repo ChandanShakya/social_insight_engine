@@ -16,4 +16,9 @@ export interface SentimentSummary {
     neutral: string[];
     negative: string[];
   };
+  takeaways: {
+    positive: string[];
+    negative: string[];
+  };
 }
+
