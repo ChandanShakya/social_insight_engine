@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.controllers.classify import classify_comments
 from pydantic import BaseModel
+from fastapi import FastAPI
 
 app = FastAPI()
 
@@ -14,13 +15,15 @@ app.add_middleware(
 )
 
 class PostRequest(BaseModel):
-    post_id: str
+    post_id : str #for safe conversion
 
 @app.post("/scrape")
-def scrape_comments(data: PostRequest):
-    return {
-        "message": "Comments scraped successfully",
-        "total_comments": 45
+def scrape_comments(data:PostRequest):
+    print("Here goes the scraper code")
+
+    return{
+        "message" : "Comments scraped successfully",
+        "total_comments" : 45
     }
 
 @app.get("/classify")
@@ -56,9 +59,6 @@ def get_classification(post_id: str):
     }
 
     return {
-        "postId": post_id,
-        "total": total,
-        "counts": counts,
-        "percentages": percentages,
-        "comments": comments,
+        "message":"Sentiment classification completed",
+        "data" : result
     }
