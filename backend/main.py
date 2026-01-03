@@ -7,9 +7,12 @@ import pandas as pd
 import os
 import json
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 app = FastAPI()
-PAGE_ID = "61585099347820" 
-ACCESS_TOKEN = "EAAbDSoF1NBoBQYwjMOoidVPgAdJKrSaf8nVraH8rqaVW5dFyzhDIv6n3FTiAVim4J9zW8hMojZA2nwHj6950DWRXOtWdy1hwKQOd5NFDsYQ15uL097ZAuC0UPNhdSLe6l6XEIVecLqZBC9E7YUiZCBMZA2rZBKrnZBELZCHO1CIvhjzbGH7kuD3WIUF7mSfTntr5IHb9mOIR7JViuBRb1VQS"
+PAGE_ID = os.getenv("FB_PAGE_ID")
+ACCESS_TOKEN = os.getenv("FB_ACCESS_TOKEN")
 # post_id = "122098429155169978"
 def scrape_facebook_comments(page_id: str, post_id: str, access_token: str):
     """
@@ -23,22 +26,22 @@ def scrape_facebook_comments(page_id: str, post_id: str, access_token: str):
 
     try:
         response = requests.get(url, params=params)
-        response.raise_for_status()  # Raises an exception for 4XX or 5XX status codes
+        response.raise_for_status()  
         data = response.json()
 
         comments_raw = data.get("comments", {}).get("data", [])
 
         if not comments_raw:
-            return 0  # No comments found
+            return 0  
 
         comments = [{"Comments": c.get("message", "")} for c in comments_raw]
 
         df = pd.DataFrame(comments)
 
-        # --- File Saving Logic ---
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__)) # Adjusted to current file location
+        
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__)) 
         DATA_DIR = os.path.join(BASE_DIR, "data")
-        os.makedirs(DATA_DIR, exist_ok=True)  # Create the data directory if it doesn't exist
+        os.makedirs(DATA_DIR, exist_ok=True)  
 
         file_path = os.path.join(DATA_DIR, "comment.xlsx")
         df.to_excel(file_path, index=False)
@@ -85,3 +88,4 @@ def get_classification(post_id: str):
         "postId": post_id,
         **result
     }
+

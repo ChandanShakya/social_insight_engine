@@ -2,10 +2,12 @@ import requests
 import pandas as pd
 import os
 import json
+from dotenv import load_dotenv
+load_dotenv()
 
-page_id = "61585099347820"
+page_id = os.getenv("FB_PAGE_ID")
 post_id = "122098429155169978"
-access_token = "EAAbDSoF1NBoBQYwjMOoidVPgAdJKrSaf8nVraH8rqaVW5dFyzhDIv6n3FTiAVim4J9zW8hMojZA2nwHj6950DWRXOtWdy1hwKQOd5NFDsYQ15uL097ZAuC0UPNhdSLe6l6XEIVecLqZBC9E7YUiZCBMZA2rZBKrnZBELZCHO1CIvhjzbGH7kuD3WIUF7mSfTntr5IHb9mOIR7JViuBRb1VQS"
+access_token = os.getenv("FB_ACCESS_TOKEN")
 
 url = f"https://graph.facebook.com/v18.0/{page_id}_{post_id}"
 

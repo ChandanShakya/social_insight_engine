@@ -2,6 +2,7 @@ from collections import defaultdict
 import os
 import pandas as pd
 from transformers import pipeline
+from takeaway_generation import extract_takeaways
 def classify_comments():
     sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
 
@@ -34,9 +35,20 @@ def classify_comments():
         for k, v in counts.items()
     }
 
+    #call the gemini by sending positive and negative
+    positive_takeaways = extract_takeaways(
+        grouped_comments["positive"],"positive"
+    )
+    negative_takeaways = extract_takeaways(
+        grouped_comments["negative"],"negative"
+    )
     return {
         "total": total,
         "counts": counts,
         "percentages": percentages,
-        "comments": grouped_comments
+        "comments": grouped_comments,
+        "takeaways" : {
+            "positive" : positive_takeaways,
+            "negative" : negative_takeaways
+    }
     }
