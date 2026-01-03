@@ -1,31 +1,42 @@
-import pandas as pd
-from transformers import pipeline
+from collections import defaultdict
 import os
-#loading the model as a pipeline
-#here the first parameter is the able_task that defines what the model is capable of
-
-
-sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
-
+from transformers import pipeline
+import pandas as pd
 def classify_comments():
-    base_name = os.path.abspath(os.path.dirname(__file__))
-    file_name = os.path.abspath(os.path.join(base_name,"..","data","comments.xlsx"))
-    df = pd.read_excel(file_name)
+    sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
 
-    sentiments = []
+    base_dir = os.path.dirname(__file__)
+    file_path = os.path.abspath(
+        os.path.join(base_dir, "..", "data", "comments.xlsx")
+    )
+
+    df = pd.read_excel(file_path)
+
+    LABEL_MAP = {"POS": "positive", "NEG": "negative", "NEU": "neutral"}
+
+    grouped_comments = defaultdict(list)
 
     for comment in df["Comments"]:
         result = sentiment_pipeline(comment)[0]
-        sentiments.append(result["label"])
+        label = LABEL_MAP[result["label"]]
+        grouped_comments[label].append(comment)
 
-    df["sentiments"] = sentiments
+    total = sum(len(v) for v in grouped_comments.values())
 
-    df.to_excel(file_name,index = False)
-    return df.to_dict(orient = "records")
+    counts = {
+        "positive": len(grouped_comments["positive"]),
+        "neutral": len(grouped_comments["neutral"]),
+        "negative": len(grouped_comments["negative"])
+    }
 
-def main():
-    result = classify_comments()
+    percentages = {
+        k: round((v / total) * 100, 2) if total > 0 else 0
+        for k, v in counts.items()
+    }
 
-if __name__ == "__main__":
-    main()
-
+    return {
+        "total": total,
+        "counts": counts,
+        "percentages": percentages,
+        "comments": grouped_comments
+    }

@@ -1,9 +1,19 @@
-export type SentimentLabel = 'positive' | 'neutral' | 'negative'
-
 export interface SentimentSummary {
-  postId: string
-  total: number
-  counts: Record<SentimentLabel, number>
-  percentages: Record<SentimentLabel, number>
-  comments: Record<SentimentLabel, string[]>
+  postId: string;
+  total: number;
+  counts: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+  percentages: {
+    positive: number;
+    neutral: number;
+    negative: number;
+  };
+  comments: {
+    positive: string[];
+    neutral: string[];
+    negative: string[];
+  };
 }
