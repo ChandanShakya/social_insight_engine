@@ -7,7 +7,7 @@ def classify_comments():
 
     base_dir = os.path.dirname(__file__)
     file_path = os.path.abspath(
-        os.path.join(base_dir, "..", "data", "comments.xlsx")
+        os.path.join(base_dir, "..", "data", "comment.xlsx")
     )
 
     df = pd.read_excel(file_path)

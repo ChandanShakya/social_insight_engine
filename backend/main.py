@@ -9,8 +9,8 @@ import json
 import requests
 app = FastAPI()
 PAGE_ID = "61585099347820" 
-ACCESS_TOKEN = "your_access_token"
-
+ACCESS_TOKEN = "EAAbDSoF1NBoBQYwjMOoidVPgAdJKrSaf8nVraH8rqaVW5dFyzhDIv6n3FTiAVim4J9zW8hMojZA2nwHj6950DWRXOtWdy1hwKQOd5NFDsYQ15uL097ZAuC0UPNhdSLe6l6XEIVecLqZBC9E7YUiZCBMZA2rZBKrnZBELZCHO1CIvhjzbGH7kuD3WIUF7mSfTntr5IHb9mOIR7JViuBRb1VQS"
+# post_id = "122098429155169978"
 def scrape_facebook_comments(page_id: str, post_id: str, access_token: str):
     """
     Scrapes comments from a specific Facebook post.
@@ -31,7 +31,7 @@ def scrape_facebook_comments(page_id: str, post_id: str, access_token: str):
         if not comments_raw:
             return 0  # No comments found
 
-        comments = [{"comment_message": c.get("message", "")} for c in comments_raw]
+        comments = [{"Comments": c.get("message", "")} for c in comments_raw]
 
         df = pd.DataFrame(comments)
 
