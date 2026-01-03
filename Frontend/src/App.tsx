@@ -239,19 +239,43 @@ function App() {
                 </div>
               </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center p-4 bg-green-50 rounded-xl border border-green-100">
-                  <div className="text-3xl font-bold text-green-600 mb-1">{data.counts.positive}</div>
-                  <div className="text-sm text-green-700 font-medium">Positive</div>
+              {/* Stats Grid as mini bar charts */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="p-4 bg-green-50 rounded-xl border border-green-100">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-sm font-medium text-green-700">Positive ({data.counts.positive})</span>
+                    <span className="text-sm font-semibold text-green-700">{data.percentages.positive}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-green-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-500"
+                      style={{ width: `${data.percentages.positive}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-xl border border-gray-200">
-                  <div className="text-3xl font-bold text-gray-600 mb-1">{data.counts.neutral}</div>
-                  <div className="text-sm text-gray-700 font-medium">Neutral</div>
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Neutral ({data.counts.neutral})</span>
+                    <span className="text-sm font-semibold text-gray-700">{data.percentages.neutral}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gray-500 transition-all duration-500"
+                      style={{ width: `${data.percentages.neutral}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-red-50 rounded-xl border border-red-100">
-                  <div className="text-3xl font-bold text-red-600 mb-1">{data.counts.negative}</div>
-                  <div className="text-sm text-red-700 font-medium">Negative</div>
+                <div className="p-4 bg-red-50 rounded-xl border border-red-100">
+                  <div className="flex items-baseline justify-between mb-2">
+                    <span className="text-sm font-medium text-red-700">Negative ({data.counts.negative})</span>
+                    <span className="text-sm font-semibold text-red-700">{data.percentages.negative}%</span>
+                  </div>
+                  <div className="h-2 w-full bg-red-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-red-500 transition-all duration-500"
+                      style={{ width: `${data.percentages.negative}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
