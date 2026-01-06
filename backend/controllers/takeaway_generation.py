@@ -4,20 +4,29 @@ from dotenv import load_dotenv
 import re
 
 load_dotenv()
-genai.configure(api_key = os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
+
+def get_gemini_model(api_key: str = None):
+    """Initialize Gemini model with provided API key or environment variable."""
+    key = api_key or os.getenv("GEMINI_API_KEY")
+    if not key:
+        raise ValueError("Gemini API key is required")
+    genai.configure(api_key=key)
+    return genai.GenerativeModel("gemini-2.5-flash-lite")
 
 
 
-def extract_combined_takeaways(positive_comments: list[str], negative_comments: list[str]) -> dict:
+def extract_combined_takeaways(positive_comments: list[str], negative_comments: list[str], api_key: str = None) -> dict:
     """
     Generate takeaways for both positive and negative comments in a single call.
     """
     if not positive_comments and not negative_comments:
         return {"positive": [], "negative": []}
 
+    # Get the Gemini model with the provided API key
+    model = get_gemini_model(api_key)
+
     # Limit comment count to maintain focus and speed
-    pos_text = "\n".join(f"- {c}" for c in positive_comments[:40]) 
+    pos_text = "\n".join(f"- {c}" for c in positive_comments[:40])
     neg_text = "\n".join(f"- {c}" for c in negative_comments[:40])
 
     prompt = f"""

@@ -1,12 +1,46 @@
 import type { SentimentSummary } from "../types";
 
+export interface Credentials {
+  pageId: string
+  accessToken: string
+  geminiApiKey: string
+}
+
+export async function fetchPosts(credentials: Omit<Credentials, 'geminiApiKey'>) {
+  const res = await fetch("http://localhost:8000/posts", {
+    method: "GET",
+    headers: {
+      "X-FB-Page-Id": credentials.pageId,
+      "X-FB-Access-Token": credentials.accessToken,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error("Failed to fetch posts. Please check your credentials.");
+  }
+
+  return res.json();
+}
+
 export async function fetchSentimentByPostId(
-  postId: string
+  postId: string,
+  credentials: Credentials
 ): Promise<SentimentSummary> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (credentials.pageId) {
+    headers["X-FB-Page-Id"] = credentials.pageId;
+  }
+  if (credentials.accessToken) {
+    headers["X-FB-Access-Token"] = credentials.accessToken;
+  }
+
   // 1) Trigger scraping for this post
   const scrapeRes = await fetch("http://localhost:8000/scrape", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ post_id: postId }),
   });
 

@@ -14,7 +14,7 @@ def get_sentiment_pipeline():
         _sentiment_pipeline = pipeline("sentiment-analysis", model="finiteautomata/bertweet-base-sentiment-analysis")
     return _sentiment_pipeline
 
-def classify_comments():
+def classify_comments(gemini_api_key: str = None):
     sentiment_pipeline = get_sentiment_pipeline()
 
     base_dir = os.path.dirname(__file__)
@@ -32,7 +32,7 @@ def classify_comments():
         }
 
     df = pd.read_excel(file_path)
-    
+
     if df.empty or "Comments" not in df.columns:
         return {
             "total": 0,
@@ -47,7 +47,7 @@ def classify_comments():
 
     # Batch Process Sentiment Analysis - significant speed boost
     comment_list = df["Comments"].astype(str).tolist()
-    
+
     # Run in batches of 16 (default) for efficiency
     results = sentiment_pipeline(comment_list)
 
@@ -70,8 +70,9 @@ def classify_comments():
 
     # Use combined call to Gemini for faster response
     takeaways = extract_combined_takeaways(
-        grouped_comments["positive"], 
-        grouped_comments["negative"]
+        grouped_comments["positive"],
+        grouped_comments["negative"],
+        api_key=gemini_api_key
     )
 
     return {

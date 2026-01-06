@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react'
-import { fetchSentimentByPostId } from './services/sentimentService'
+import { useMemo, useState, useEffect } from 'react'
+import { fetchSentimentByPostId, fetchPosts, type Credentials } from './services/sentimentService'
 import type { SentimentSummary } from './types'
 import { useTheme } from './services/themeService'
 import {
@@ -9,7 +9,8 @@ import {
 import {
   Search, Sun, Moon, MessageSquare, PieChart as PieIcon,
   ThumbsUp, ThumbsDown, Minus, AlertCircle, ChevronLeft, ChevronRight,
-  TrendingUp, LayoutDashboard, Database, Info, Lightbulb, Sparkles, ShieldAlert
+  TrendingUp, LayoutDashboard, Database, Info, Lightbulb, Sparkles, ShieldAlert,
+  Settings, Key, Save, X, Facebook, Globe, Calendar, RefreshCw
 } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -24,6 +25,13 @@ interface SearchHistory {
   summary: SentimentSummary
 }
 
+interface FbPost {
+  id: string
+  message?: string
+  created_time: string
+  permalink_url: string
+}
+
 function App() {
   const { theme, setTheme } = useTheme()
   const [postId, setPostId] = useState('')
@@ -35,16 +43,88 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedTab, setSelectedTab] = useState<'all' | 'positive' | 'neutral' | 'negative'>('all')
 
+  // Credentials State
+  const [credentials, setCredentials] = useState<Credentials>({
+    pageId: '',
+    accessToken: '',
+    geminiApiKey: ''
+  })
+  const [showSettings, setShowSettings] = useState(false)
+  
+  // Posts State
+  const [myPosts, setMyPosts] = useState<FbPost[]>([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [postsError, setPostsError] = useState<string | null>(null)
+  const [showPostsDropdown, setShowPostsDropdown] = useState(false)
+
+  // Load credentials from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('social_insight_credentials')
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved)
+        setCredentials(parsed)
+      } catch (e) {
+        console.error("Failed to parse credentials", e)
+      }
+    }
+  }, [])
+
   const commentsPerPage = 5
 
   const canSearch = useMemo(() => postId.trim().length > 0 && !loading, [postId, loading])
+
+  function handleSaveCredentials(e: React.FormEvent) {
+    e.preventDefault()
+    localStorage.setItem('social_insight_credentials', JSON.stringify(credentials))
+    setShowSettings(false)
+    // Clear posts if credentials changed to force reload/avoid mismatch
+    setMyPosts([]) 
+    setShowPostsDropdown(false)
+  }
+
+  async function loadMyPosts() {
+    if (!credentials.pageId || !credentials.accessToken) {
+      setPostsError("Configure Page ID & Access Token in Settings first")
+      setShowSettings(true)
+      return
+    }
+
+    setLoadingPosts(true)
+    setPostsError(null)
+    try {
+      const res = await fetchPosts(credentials)
+      if (res.posts) {
+        setMyPosts(res.posts)
+        setShowPostsDropdown(true)
+      } else {
+        setPostsError("No posts found or invalid response format")
+      }
+    } catch (e: any) {
+      setPostsError(e.message || "Failed to load posts")
+    } finally {
+      setLoadingPosts(false)
+    }
+  }
 
   async function onSearch() {
     if (!canSearch) return
     setLoading(true)
     setError(null)
+    
+    // Check if we have credentials
+    if (!credentials.pageId || !credentials.accessToken) {
+       // Optional: Prompt user, but for now we'll try sending what we have or rely on backend defaults if any (unlikely)
+       // Actually, let's warn if missing to improve UX
+       if (!credentials.pageId && !credentials.accessToken) {
+         // If completely empty, maybe prompt settings? 
+         // But maybe user wants to use backend defaults? 
+         // Let's proceed, fetchSentimentByPostId handles it.
+       }
+    }
+
     try {
-      const res = await fetchSentimentByPostId(postId.trim())
+      const res = await fetchSentimentByPostId(postId.trim(), credentials)
       setData(res)
       const newHistoryItem = { postId: postId.trim(), timestamp: Date.now(), summary: res }
       setHistory(prev => {
@@ -53,6 +133,7 @@ function App() {
       })
       setCurrentPage(1)
       setShowHistory(false)
+      setShowPostsDropdown(false)
     } catch (e: any) {
       setError(e?.message || 'Failed to fetch sentiment')
     } finally {
@@ -166,6 +247,92 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col transition-colors duration-300">
+      
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-card border border-border rounded-3xl shadow-2xl p-6 md:p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl">
+                  <Settings className="w-6 h-6 text-primary" />
+                </div>
+                <h2 className="text-xl font-black tracking-tight">API Configuration</h2>
+              </div>
+              <button 
+                onClick={() => setShowSettings(false)}
+                className="p-2 hover:bg-muted rounded-full transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleSaveCredentials} className="space-y-6">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Facebook Page ID</label>
+                  <div className="relative">
+                    <Facebook className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input 
+                      type="text" 
+                      value={credentials.pageId}
+                      onChange={e => setCredentials(c => ({ ...c, pageId: e.target.value }))}
+                      placeholder="e.g., 1023456789"
+                      className="w-full bg-muted/30 border border-border rounded-xl px-10 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Facebook Access Token</label>
+                  <div className="relative">
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input 
+                      type="password" 
+                      value={credentials.accessToken}
+                      onChange={e => setCredentials(c => ({ ...c, accessToken: e.target.value }))}
+                      placeholder="EAA..."
+                      className="w-full bg-muted/30 border border-border rounded-xl px-10 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Gemini API Key</label>
+                  <div className="relative">
+                    <Sparkles className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <input 
+                      type="password" 
+                      value={credentials.geminiApiKey}
+                      onChange={e => setCredentials(c => ({ ...c, geminiApiKey: e.target.value }))}
+                      placeholder="AIza..."
+                      className="w-full bg-muted/30 border border-border rounded-xl px-10 py-3 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button 
+                  type="button" 
+                  onClick={() => setShowSettings(false)}
+                  className="px-5 py-2.5 rounded-xl font-bold text-sm text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-6 py-2.5 rounded-xl bg-primary text-primary-foreground font-bold text-sm shadow-lg shadow-primary/20 hover:opacity-90 active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save Configuration
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <nav className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -179,6 +346,13 @@ function App() {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowSettings(true)}
+              className="p-2.5 hover:bg-secondary rounded-xl transition-all border border-transparent hover:border-border text-muted-foreground hover:text-foreground"
+              title="API Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
             {history.length > 0 && (
               <button
                 onClick={() => setShowHistory(!showHistory)}
@@ -206,7 +380,7 @@ function App() {
       <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 py-8 md:py-16">
         {/* History Dropdown Panel */}
         {showHistory && history.length > 0 && (
-          <div className="max-w-3xl mx-auto mb-12 animate-in slide-in-from-top-4 duration-300">
+          <div className="max-w-3xl mx-auto mb-12 animate-in slide-in-from-top-4 duration-300 relative z-20">
             <div className="bg-card border border-border rounded-3xl p-6 shadow-2xl">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-black text-lg flex items-center gap-2">
@@ -250,42 +424,109 @@ function App() {
         </div>
 
         {/* Search Section */}
-        <div className="max-w-3xl mx-auto mb-16 md:mb-24">
-          <div className="bg-card border border-border rounded-2xl md:rounded-3xl p-2 md:p-3 flex flex-col md:flex-row items-center gap-2 shadow-2xl relative z-10">
-            <div className="hidden md:flex pl-4 text-muted-foreground">
-              <Database className="w-5 h-5" />
+        <div className="max-w-3xl mx-auto mb-16 md:mb-24 relative">
+          
+          <div className="flex flex-col gap-4">
+            {/* Input Group */}
+            <div className="bg-card border border-border rounded-2xl md:rounded-3xl p-2 md:p-3 flex flex-col md:flex-row items-center gap-2 shadow-2xl relative z-10">
+              <div className="hidden md:flex pl-4 text-muted-foreground">
+                <Database className="w-5 h-5" />
+              </div>
+              <input
+                className="w-full md:flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-3 px-4 outline-none placeholder:text-muted-foreground/50"
+                placeholder="Paste Facebook Post ID here..."
+                value={postId}
+                onChange={(e) => setPostId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+              />
+              
+              <button
+                onClick={onSearch}
+                disabled={!canSearch}
+                className={cn(
+                  "w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98]",
+                  canSearch
+                    ? "bg-primary text-primary-foreground hover:opacity-90 shadow-xl shadow-primary/20"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                {loading ? (
+                  <div className="w-5 h-5 border-3 border-primary-foreground border-t-transparent animate-spin rounded-full" />
+                ) : (
+                  <Search className="w-5 h-5" />
+                )}
+                {loading ? 'Analyzing...' : 'Analyze Now'}
+              </button>
             </div>
-            <input
-              className="w-full md:flex-1 bg-transparent border-none focus:ring-0 text-base md:text-lg py-3 px-4 outline-none placeholder:text-muted-foreground/50"
-              placeholder="Paste Facebook Post ID here..."
-              value={postId}
-              onChange={(e) => setPostId(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-            />
-            <button
-              onClick={onSearch}
-              disabled={!canSearch}
-              className={cn(
-                "w-full md:w-auto px-8 py-4 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-3 transition-all active:scale-[0.98]",
-                canSearch
-                  ? "bg-primary text-primary-foreground hover:opacity-90 shadow-xl shadow-primary/20"
-                  : "bg-muted text-muted-foreground cursor-not-allowed"
-              )}
-            >
-              {loading ? (
-                <div className="w-5 h-5 border-3 border-primary-foreground border-t-transparent animate-spin rounded-full" />
-              ) : (
-                <Search className="w-5 h-5" />
-              )}
-              {loading ? 'Analyzing...' : 'Analyze Now'}
-            </button>
+
+            {/* Load Posts Tool */}
+            <div className="flex items-center justify-center md:justify-start gap-3 px-2">
+                <button
+                  onClick={loadMyPosts}
+                  disabled={loadingPosts}
+                  className="text-xs font-bold uppercase tracking-wide text-muted-foreground hover:text-primary transition-colors flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-lg border border-transparent hover:border-primary/20"
+                >
+                  {loadingPosts ? <div className="w-3 h-3 border-2 border-current border-t-transparent animate-spin rounded-full" /> : <Globe className="w-3.5 h-3.5" />}
+                  {loadingPosts ? 'Fetching...' : 'Load My Recent Posts'}
+                </button>
+                {myPosts.length > 0 && (
+                   <span className="text-[10px] font-medium text-muted-foreground/50">• {myPosts.length} posts found</span>
+                )}
+            </div>
+
+            {/* Posts Dropdown */}
+            {(showPostsDropdown || myPosts.length > 0) && (
+              <div className={cn(
+                "w-full bg-card/95 backdrop-blur-xl border border-border rounded-2xl p-2 shadow-xl animate-in slide-in-from-top-2",
+                !showPostsDropdown && "hidden"
+              )}>
+                <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 mb-2">
+                   <span className="text-xs font-black uppercase tracking-widest text-muted-foreground">Select a Post</span>
+                   <button onClick={() => setShowPostsDropdown(false)} className="text-muted-foreground hover:text-foreground">
+                     <X className="w-3.5 h-3.5" />
+                   </button>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto no-scrollbar space-y-1">
+                  {myPosts.map((post) => (
+                    <button
+                      key={post.id}
+                      onClick={() => {
+                        setPostId(post.id);
+                        setShowPostsDropdown(false);
+                      }}
+                      className="w-full text-left p-3 rounded-xl hover:bg-muted/50 transition-colors group border border-transparent hover:border-border/50"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-primary/5 text-primary rounded-lg shrink-0">
+                          <Facebook className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate block">
+                             {post.message || <span className="italic text-muted-foreground">No caption (Image/Video)</span>}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              {new Date(post.created_time).toLocaleDateString()}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground/40 font-mono">{post.id}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          {error && (
+
+          {/* Global Error Display */}
+          {(error || postsError) && (
             <div className="mt-6 flex items-start gap-3 text-destructive bg-destructive/5 p-5 rounded-2xl border border-destructive/20 animate-in slide-in-from-top-2">
               <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" />
               <div className="flex flex-col">
-                <span className="text-sm font-bold">Analysis Failed</span>
-                <span className="text-sm opacity-90">{error}</span>
+                <span className="text-sm font-bold">Action Failed</span>
+                <span className="text-sm opacity-90">{error || postsError}</span>
               </div>
             </div>
           )}
