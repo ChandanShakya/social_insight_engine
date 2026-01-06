@@ -1,6 +1,8 @@
 # Python
 backend/__pycache__/
 backend/controllers/__pycache__/
+backend/scrapers/__pycache__/
+backend/data/
 *.py[cod]
 *$py.class
 *.so
@@ -18,14 +20,13 @@ sdist/
 var/
 wheels/
 *.egg-info/
-.installed.cfg
 *.egg
 
 # Virtual Environment
-.env
+backend/venv/
+backend/.env
 .venv
 env/
-venv/
 ENV/
 env.bak/
 venv.bak/
@@ -35,10 +36,27 @@ venv.bak/
 .idea/
 
 # Node
-node_modules/
+Frontend/node_modules/
 npm-debug.log
 yarn-error.log
 
+# Logs
+*.log
+/tmp/backend.log
+/tmp/frontend.log
+
 # Project specific
 backend/data/*.xlsx
+backend/data/*.csv
+backend/data/*.json
 *.csv
+*.xlsx
+*.json
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# API keys and secrets
+.env
+*.env

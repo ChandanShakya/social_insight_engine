@@ -1,3 +1,4 @@
+import os
 import csv
 import re
 import time
@@ -544,9 +545,9 @@ def main():
     # CONFIGURATION - EDIT THESE VALUES
     # ================================================
     
-    # Facebook login credentials
-    FACEBOOK_EMAIL = "ujencb546@gmail.com"  # ← REPLACE WITH YOUR EMAIL
-    FACEBOOK_PASSWORD = "Manjesh@1234"       # ← REPLACE WITH YOUR PASSWORD
+    # Facebook login credentials - load from environment variables
+    FACEBOOK_EMAIL = os.getenv("FB_EMAIL") or input("Enter your Facebook email: ")
+    FACEBOOK_PASSWORD = os.getenv("FB_PASSWORD") or input("Enter your Facebook password: ")
 
     # Post URLs to scrape (can be one or multiple)
     POST_URLS = [

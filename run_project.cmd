@@ -1,20 +1,41 @@
 @echo off
 echo Starting Social Insight Engine...
 
+:: Check if backend directory exists
+if not exist "backend" (
+    echo Error: backend directory not found!
+    pause
+    exit /b 1
+)
+
+:: Check if frontend directory exists
+if not exist "Frontend" (
+    echo Error: Frontend directory not found!
+    pause
+    exit /b 1
+)
+
 :: Start Backend
 echo Starting Backend...
-start cmd /k "cd backend && python -m uvicorn main:app --reload"
+cd backend
+start cmd /k "cd /d %cd% && venv\Scripts\python -m uvicorn main:app --reload"
 
 :: Start Frontend
 echo Starting Frontend...
-start cmd /k "cd Frontend && npm run dev"
+cd ..\Frontend
+start cmd /k "cd /d %cd% && npm run dev"
+
+:: Return to root
+cd ..
 
 echo Process started in new windows.
-
-:: Open Chrome
-echo Opening Chrome...
-start chrome "http://localhost:5173"
-
+echo.
 echo Backend: http://localhost:8000
 echo Frontend: http://localhost:5173
+echo API Docs: http://localhost:8000/docs
+echo.
+echo Opening browser...
+timeout /t 2 >nul
+start chrome "http://localhost:5173"
+
 pause
