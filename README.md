@@ -37,7 +37,7 @@ social_insight_engine/
 │   ├── README.md              # Backend documentation
 │   ├── setup.sh               # Unix setup script
 │   └── start.sh               # Unix start script
-├── Frontend/                  # React + TypeScript frontend
+├── frontend/                  # React + TypeScript frontend
 │   ├── src/
 │   │   ├── services/          # API services
 │   │   │   ├── sentimentService.ts
